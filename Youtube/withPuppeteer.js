@@ -1,9 +1,12 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 
-const searchString = "cheerio js";
+puppeteer.use(StealthPlugin());
+
+const searchString = "psy";
 const encodedString = encodeURI(searchString);
 
-async function getOrganicResults() {
+exports.getSearchResults = async function getSearchResults() {
   const browser = await puppeteer.launch({
     headless: false,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
@@ -12,27 +15,27 @@ async function getOrganicResults() {
   const page = await browser.newPage();
 
   await page.setDefaultNavigationTimeout(60000);
-  await page.goto(`https://bing.com/search?q=${encodedString}&setmkt=en-WW&setlang=en`);
-  await page.waitForSelector(".b_pag");
-  const numberOfResults = await page.$$("#b_results > li");
-  for (let i = 1; i <= numberOfResults.length; i++) {
-    await page.hover(`#b_results > li:nth-child(${i})`);
-    await page.waitForTimeout(1000);
-  }
-  await page.hover(".b_pag");
+  await page.goto(`https://www.youtube.com/results?search_query=${encodedString}&gl=US&hl=EN`);
+  await page.waitForSelector("#contents > ytd-video-renderer");
+  await page.waitForTimeout(5000);
 
-  const result = await page.evaluate(function () {
-    return Array.from(document.querySelectorAll("li.b_algo")).map((el) => ({
-      link: el.querySelector("h2 > a").getAttribute("href"),
-      title: el.querySelector("h2 > a").innerText,
-      snippet: el.querySelector("p, .b_mText div").innerText,
+  const organicResult = await page.evaluate(function () {
+    return Array.from(document.querySelectorAll("#contents > ytd-video-renderer")).map((el) => ({
+      link: "https://www.youtube.com" + el.querySelector("a#thumbnail").getAttribute("href"),
+      title: el.querySelector("a#video-title").textContent.trim(),
+      description: el.querySelector(".metadata-snippet-container > yt-formatted-string").textContent.trim(),
+      views: el.querySelectorAll("#metadata-line > span")[0].textContent.trim(),
+      published_date: el.querySelectorAll("#metadata-line > span")[1].textContent.trim(),
+      channel: {
+        name: el.querySelector("#channel-info #channel-name a").textContent.trim(),
+        link: "https://www.youtube.com" + el.querySelector("#channel-info #channel-name a").getAttribute("href"),
+      },
     }));
   });
 
   await browser.close();
 
-  console.log(result);
-  return result;
-}
-
-getOrganicResults();
+  console.log("Puppeteer results:");
+  console.log(organicResult);
+  return organicResult;
+};
